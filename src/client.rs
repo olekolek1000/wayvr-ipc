@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
 	gen_id,
 	ipc::{self, binary_decode, binary_encode, Serial},
-	packet_client::PacketClient,
+	packet_client::{self, PacketClient},
 	packet_server::{self, PacketServer},
 	util::notifier::Notifier,
 };
@@ -97,7 +97,12 @@ impl WayVRClient {
 		let printname = "/tmp/wayvr_ipc.sock";
 		let name = printname.to_ns_name::<GenericNamespaced>()?;
 
-		let stream = Stream::connect(name).await?;
+		let stream = match Stream::connect(name).await {
+			Ok(c) => c,
+			Err(e) => {
+				anyhow::bail!("Failed to connect to the WayVR IPC: {}. Make sure you have wlx-overlay-s already running. Check README at https://github.com/olekolek1000/wayvr-dashboard", e)
+			}
+		};
 		let (receiver, sender) = stream.split();
 
 		let receiver = Arc::new(Mutex::new(receiver));
@@ -240,14 +245,14 @@ impl WayVRClient {
 		}
 	}
 
-	pub async fn fn_display_list(
+	pub async fn fn_wvr_display_list(
 		client_mtx: WayVRClientMutex,
 		serial: Serial,
-	) -> anyhow::Result<Vec<packet_server::Display>> {
-		let PacketServer::DisplayListResponse(_, display_list) = WayVRClient::queue_wait_packet(
+	) -> anyhow::Result<Vec<packet_server::WvrDisplay>> {
+		let PacketServer::WvrDisplayListResponse(_, display_list) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::DisplayList(serial)),
+			&binary_encode(&PacketClient::WvrDisplayList(serial)),
 		)
 		.await?
 		else {
@@ -256,15 +261,15 @@ impl WayVRClient {
 		Ok(display_list.list)
 	}
 
-	pub async fn fn_display_get(
+	pub async fn fn_wvr_display_get(
 		client_mtx: WayVRClientMutex,
 		serial: Serial,
-		handle: packet_server::DisplayHandle,
-	) -> anyhow::Result<Option<packet_server::Display>> {
-		let PacketServer::DisplayGetResponse(_, display) = WayVRClient::queue_wait_packet(
+		handle: packet_server::WvrDisplayHandle,
+	) -> anyhow::Result<Option<packet_server::WvrDisplay>> {
+		let PacketServer::WvrDisplayGetResponse(_, display) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::DisplayGet(serial, handle)),
+			&binary_encode(&PacketClient::WvrDisplayGet(serial, handle)),
 		)
 		.await?
 		else {
@@ -273,14 +278,31 @@ impl WayVRClient {
 		Ok(display)
 	}
 
-	pub async fn fn_process_list(
+	pub async fn fn_wvr_display_create(
 		client_mtx: WayVRClientMutex,
 		serial: Serial,
-	) -> anyhow::Result<Vec<packet_server::Process>> {
-		let PacketServer::ProcessListResponse(_, process_list) = WayVRClient::queue_wait_packet(
+		params: packet_client::WvrDisplayCreateParams,
+	) -> anyhow::Result<packet_server::WvrDisplayHandle> {
+		let PacketServer::WvrDisplayCreateResponse(_, handle) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::ProcessList(serial)),
+			&binary_encode(&PacketClient::WvrDisplayCreate(serial, params)),
+		)
+		.await?
+		else {
+			bail_unexpected_response!();
+		};
+		Ok(handle)
+	}
+
+	pub async fn fn_wvr_process_list(
+		client_mtx: WayVRClientMutex,
+		serial: Serial,
+	) -> anyhow::Result<Vec<packet_server::WvrProcess>> {
+		let PacketServer::WvrProcessListResponse(_, process_list) = WayVRClient::queue_wait_packet(
+			client_mtx,
+			serial,
+			&binary_encode(&PacketClient::WvrProcessList(serial)),
 		)
 		.await?
 		else {
@@ -290,16 +312,34 @@ impl WayVRClient {
 		Ok(process_list.list)
 	}
 
-	pub async fn fn_process_terminate(
+	pub async fn fn_wvr_process_terminate(
 		client_mtx: WayVRClientMutex,
-		handle: packet_server::ProcessHandle,
+		handle: packet_server::WvrProcessHandle,
 	) -> anyhow::Result<()> {
 		WayVRClient::send_payload(
 			client_mtx,
-			&binary_encode(&PacketClient::ProcessTerminate(handle)),
+			&binary_encode(&PacketClient::WvrProcessTerminate(handle)),
 		)
 		.await?;
 		Ok(())
+	}
+
+	pub async fn fn_wvr_process_launch(
+		client_mtx: WayVRClientMutex,
+		serial: Serial,
+		params: packet_client::WvrProcessLaunchParams,
+	) -> anyhow::Result<packet_server::WvrProcessHandle> {
+		let PacketServer::WvrProcessLaunchResponse(_, handle) = WayVRClient::queue_wait_packet(
+			client_mtx,
+			serial,
+			&binary_encode(&PacketClient::WvrProcessLaunch(serial, params)),
+		)
+		.await?
+		else {
+			bail_unexpected_response!();
+		};
+
+		Ok(handle.map_err(|e| anyhow::anyhow!("{}", e))?)
 	}
 }
 

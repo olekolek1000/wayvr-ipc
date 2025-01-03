@@ -5,56 +5,62 @@ use serde::{Deserialize, Serialize};
 use super::ipc::Serial;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DisplayHandle {
+pub struct WvrDisplayHandle {
 	pub idx: u32,
 	pub generation: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessHandle {
+pub struct WvrProcessHandle {
 	pub idx: u32,
 	pub generation: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Display {
-	pub width: u32,
-	pub height: u32,
+pub struct WvrDisplay {
+	pub width: u16,
+	pub height: u16,
 	pub name: String,
 	pub visible: bool,
-	pub handle: DisplayHandle,
+	pub handle: WvrDisplayHandle,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DisplayList {
-	pub list: Vec<Display>,
+pub struct WvrDisplayList {
+	pub list: Vec<WvrDisplay>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Process {
+pub struct WvrProcess {
 	pub name: String,
-	pub display_handle: DisplayHandle,
-	pub handle: ProcessHandle,
+	pub display_handle: WvrDisplayHandle,
+	pub handle: WvrProcessHandle,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ProcessList {
-	pub list: Vec<Process>,
+pub struct WvrProcessList {
+	pub list: Vec<WvrProcess>,
 }
+
+// "Wvr" prefixes are WayVR-specific
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PacketServer {
-	DisplayListResponse(Serial, DisplayList),
-	DisplayGetResponse(Serial, Option<Display>),
-	ProcessListResponse(Serial, ProcessList),
+	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
+	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
+	WvrDisplayListResponse(Serial, WvrDisplayList),
+	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
+	WvrProcessListResponse(Serial, WvrProcessList),
 }
 
 impl PacketServer {
 	pub fn serial(&self) -> Option<&Serial> {
 		match self {
-			PacketServer::DisplayListResponse(serial, _) => Some(serial),
-			PacketServer::DisplayGetResponse(serial, _) => Some(serial),
-			PacketServer::ProcessListResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayCreateResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayGetResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayListResponse(serial, _) => Some(serial),
+			PacketServer::WvrProcessLaunchResponse(serial, _) => Some(serial),
+			PacketServer::WvrProcessListResponse(serial, _) => Some(serial),
 		}
 	}
 }
