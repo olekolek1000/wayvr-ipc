@@ -4,6 +4,7 @@ use interprocess::local_socket::{
 	tokio::{prelude::*, Stream},
 	GenericNamespaced,
 };
+use serde::Serialize;
 use smallvec::SmallVec;
 use std::sync::{Arc, Weak};
 use tokio::{
@@ -14,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
 	gen_id,
-	ipc::{self, binary_decode, binary_encode, Serial},
+	ipc::{self, Serial},
 	packet_client::{self, PacketClient},
 	packet_server::{self, PacketServer},
 	util::notifier::Notifier,
@@ -33,12 +34,18 @@ gen_id!(
 	QueuedPacketHandle
 );
 
+#[derive(Debug, Serialize, Clone)]
+pub struct AuthInfo {
+	pub runtime: String,
+}
+
 pub struct WayVRClient {
 	receiver: ReceiverMutex,
 	sender: SenderMutex,
 	cancel_token: CancellationToken,
 	exiting: bool,
 	queued_packets: QueuedPacketVec,
+	pub auth: Option<AuthInfo>, // Some if authenticated
 }
 
 pub async fn send_packet(sender: &SenderMutex, data: &[u8]) -> anyhow::Result<()> {
@@ -51,13 +58,6 @@ pub async fn send_packet(sender: &SenderMutex, data: &[u8]) -> anyhow::Result<()
 	bytes.put_slice(data);
 
 	sender.lock().await.write_all(&bytes).await?;
-
-	Ok(())
-}
-
-async fn send_handshake(sender: &SenderMutex) -> anyhow::Result<()> {
-	let handshake = ipc::Handshake::new();
-	send_packet(sender, &binary_encode(&handshake)).await?;
 
 	Ok(())
 }
@@ -93,7 +93,7 @@ macro_rules! bail_unexpected_response {
 }
 
 impl WayVRClient {
-	pub async fn new() -> anyhow::Result<WayVRClientMutex> {
+	pub async fn new(client_name: &str) -> anyhow::Result<WayVRClientMutex> {
 		let printname = "/tmp/wayvr_ipc.sock";
 		let name = printname.to_ns_name::<GenericNamespaced>()?;
 
@@ -108,35 +108,42 @@ impl WayVRClient {
 		let receiver = Arc::new(Mutex::new(receiver));
 		let sender = Arc::new(Mutex::new(sender));
 
-		send_handshake(&sender).await?;
-
 		let cancel_token = CancellationToken::new();
 
 		let client = Arc::new(Mutex::new(Self {
 			receiver,
-			sender,
+			sender: sender.clone(),
 			exiting: false,
 			cancel_token: cancel_token.clone(),
 			queued_packets: QueuedPacketVec::new(),
+			auth: None,
 		}));
 
 		WayVRClient::start_runner(client.clone(), cancel_token);
+
+		// Send handshake to the server
+		send_packet(
+			&sender,
+			&ipc::data_encode(&PacketClient::Handshake(packet_client::Handshake {
+				client_name: String::from(client_name),
+				magic: String::from(ipc::CONNECTION_MAGIC),
+				protocol_version: ipc::PROTOCOL_VERSION,
+			})),
+		)
+		.await?;
 
 		Ok(client)
 	}
 
 	fn start_runner(client: WayVRClientMutex, cancel_token: CancellationToken) {
 		tokio::spawn(async move {
-			loop {
-				tokio::select! {
-						_ = cancel_token.cancelled() => {
-								log::info!("Exiting WayVRClient runner");
-								break;
-						}
-						_ = client_runner(client.clone()) => {
-								log::info!("start_runner select failed");
-						}
-				}
+			tokio::select! {
+					_ = cancel_token.cancelled() => {
+							log::info!("Exiting IPC runner gracefully");
+					}
+					e = client_runner(client.clone()) => {
+							log::info!("IPC Runner failed: {:?}", e);
+					}
 			}
 		});
 	}
@@ -156,12 +163,38 @@ impl WayVRClient {
 				anyhow::bail!("packet size too large");
 			}
 			let payload = read_payload(&mut receiver, packet_size).await?;
-			let packet: PacketServer = binary_decode(&payload)?;
+			let packet: PacketServer = ipc::data_decode(&payload)?;
 			packet
 		};
 
 		{
 			let mut client = client_mtx.lock().await;
+
+			if let PacketServer::HandshakeSuccess(success) = &packet {
+				if client.auth.is_some() {
+					anyhow::bail!("Got handshake response twice");
+				}
+
+				client.auth = Some(AuthInfo {
+					runtime: success.runtime.clone(),
+				});
+
+				log::info!(
+					"Authenticated. Server runtime name: \"{}\"",
+					success.runtime
+				);
+			}
+
+			if let PacketServer::Disconnect(disconnect) = &packet {
+				anyhow::bail!("Server disconnected us. Reason: {}", disconnect.reason);
+			}
+
+			if client.auth.is_none() {
+				anyhow::bail!(
+					"Server tried to send us a packet which is not a HandshakeSuccess or Disconnect"
+				);
+			}
+
 			// queue packet to read if it contains a serial response
 			if let Some(serial) = packet.serial() {
 				for qpacket in &mut client.queued_packets.vec {
@@ -252,7 +285,7 @@ impl WayVRClient {
 		let PacketServer::WvrDisplayListResponse(_, display_list) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::WvrDisplayList(serial)),
+			&ipc::data_encode(&PacketClient::WvrDisplayList(serial)),
 		)
 		.await?
 		else {
@@ -269,7 +302,7 @@ impl WayVRClient {
 		let PacketServer::WvrDisplayGetResponse(_, display) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::WvrDisplayGet(serial, handle)),
+			&ipc::data_encode(&PacketClient::WvrDisplayGet(serial, handle)),
 		)
 		.await?
 		else {
@@ -286,7 +319,7 @@ impl WayVRClient {
 		let PacketServer::WvrDisplayCreateResponse(_, handle) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::WvrDisplayCreate(serial, params)),
+			&ipc::data_encode(&PacketClient::WvrDisplayCreate(serial, params)),
 		)
 		.await?
 		else {
@@ -302,7 +335,7 @@ impl WayVRClient {
 		let PacketServer::WvrProcessListResponse(_, process_list) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::WvrProcessList(serial)),
+			&ipc::data_encode(&PacketClient::WvrProcessList(serial)),
 		)
 		.await?
 		else {
@@ -318,7 +351,7 @@ impl WayVRClient {
 	) -> anyhow::Result<()> {
 		WayVRClient::send_payload(
 			client_mtx,
-			&binary_encode(&PacketClient::WvrProcessTerminate(handle)),
+			&ipc::data_encode(&PacketClient::WvrProcessTerminate(handle)),
 		)
 		.await?;
 		Ok(())
@@ -332,14 +365,14 @@ impl WayVRClient {
 		let PacketServer::WvrProcessLaunchResponse(_, handle) = WayVRClient::queue_wait_packet(
 			client_mtx,
 			serial,
-			&binary_encode(&PacketClient::WvrProcessLaunch(serial, params)),
+			&ipc::data_encode(&PacketClient::WvrProcessLaunch(serial, params)),
 		)
 		.await?
 		else {
 			bail_unexpected_response!();
 		};
 
-		Ok(handle.map_err(|e| anyhow::anyhow!("{}", e))?)
+		handle.map_err(|e| anyhow::anyhow!("{}", e))
 	}
 }
 

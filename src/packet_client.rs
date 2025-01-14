@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 use super::{ipc::Serial, packet_server};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Handshake {
+	pub protocol_version: u32, // always set to PROTOCOL_VERSION
+	pub magic: String,         // always set to CONNECTION_MAGIC
+	pub client_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum AttachTo {
 	None,
 	HandLeft,
@@ -33,6 +40,7 @@ pub struct WvrDisplayCreateParams {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PacketClient {
+	Handshake(Handshake),
 	WvrDisplayCreate(Serial, WvrDisplayCreateParams),
 	WvrDisplayGet(Serial, packet_server::WvrDisplayHandle),
 	WvrDisplayList(Serial),

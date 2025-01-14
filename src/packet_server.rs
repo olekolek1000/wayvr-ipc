@@ -5,6 +5,19 @@ use serde::{Deserialize, Serialize};
 use super::ipc::Serial;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerInfo {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HandshakeSuccess {
+	pub runtime: String, // Runtime name, for example "wlx-overlay-s"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Disconnect {
+	pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrDisplayHandle {
 	pub idx: u32,
 	pub generation: u64,
@@ -46,6 +59,8 @@ pub struct WvrProcessList {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PacketServer {
+	HandshakeSuccess(HandshakeSuccess),
+	Disconnect(Disconnect),
 	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
 	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
 	WvrDisplayListResponse(Serial, WvrDisplayList),
@@ -56,6 +71,8 @@ pub enum PacketServer {
 impl PacketServer {
 	pub fn serial(&self) -> Option<&Serial> {
 		match self {
+			PacketServer::HandshakeSuccess(_) => None,
+			PacketServer::Disconnect(_) => None,
 			PacketServer::WvrDisplayCreateResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayGetResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayListResponse(serial, _) => Some(serial),
