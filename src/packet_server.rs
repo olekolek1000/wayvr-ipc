@@ -64,6 +64,7 @@ pub enum PacketServer {
 	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
 	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
 	WvrDisplayListResponse(Serial, WvrDisplayList),
+	WvrDisplayRemoveResponse(Serial, Result<(), String>),
 	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
 	WvrProcessListResponse(Serial, WvrProcessList),
 }
@@ -76,6 +77,7 @@ impl PacketServer {
 			PacketServer::WvrDisplayCreateResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayGetResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayListResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayRemoveResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessLaunchResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessListResponse(serial, _) => Some(serial),
 		}

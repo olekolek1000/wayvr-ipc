@@ -44,6 +44,7 @@ pub enum PacketClient {
 	WvrDisplayCreate(Serial, WvrDisplayCreateParams),
 	WvrDisplayGet(Serial, packet_server::WvrDisplayHandle),
 	WvrDisplayList(Serial),
+	WvrDisplayRemove(Serial, packet_server::WvrDisplayHandle),
 	WvrProcessLaunch(Serial, WvrProcessLaunchParams),
 	WvrProcessList(Serial),
 	WvrProcessTerminate(packet_server::WvrProcessHandle),
