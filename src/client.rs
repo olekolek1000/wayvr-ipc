@@ -92,6 +92,27 @@ macro_rules! bail_unexpected_response {
 	};
 }
 
+// Send and wait for a response from the server
+macro_rules! send_and_wait {
+	($client_mtx:expr, $serial:expr, $packet_to_send:expr, $expected_response_type:ident) => {{
+		let result =
+			WayVRClient::queue_wait_packet($client_mtx, $serial, &ipc::data_encode($packet_to_send))
+				.await?;
+		if let PacketServer::$expected_response_type(_, res) = result {
+			res
+		} else {
+			bail_unexpected_response!();
+		}
+	}};
+}
+
+// Send without expecting any response
+macro_rules! send_only {
+	($client_mtx:expr, $packet_to_send:expr) => {{
+		WayVRClient::send_payload($client_mtx, &ipc::data_encode($packet_to_send)).await?;
+	}};
+}
+
 impl WayVRClient {
 	pub async fn new(client_name: &str) -> anyhow::Result<WayVRClientMutex> {
 		let printname = "/tmp/wayvr_ipc.sock";
@@ -279,118 +300,95 @@ impl WayVRClient {
 	}
 
 	pub async fn fn_wvr_display_list(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 	) -> anyhow::Result<Vec<packet_server::WvrDisplay>> {
-		let PacketServer::WvrDisplayListResponse(_, display_list) = WayVRClient::queue_wait_packet(
-			client_mtx,
-			serial,
-			&ipc::data_encode(&PacketClient::WvrDisplayList(serial)),
+		Ok(
+			send_and_wait!(
+				client,
+				serial,
+				&PacketClient::WvrDisplayList(serial),
+				WvrDisplayListResponse
+			)
+			.list,
 		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-		Ok(display_list.list)
 	}
 
 	pub async fn fn_wvr_display_get(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 		handle: packet_server::WvrDisplayHandle,
 	) -> anyhow::Result<Option<packet_server::WvrDisplay>> {
-		let PacketServer::WvrDisplayGetResponse(_, display) = WayVRClient::queue_wait_packet(
-			client_mtx,
+		Ok(send_and_wait!(
+			client,
 			serial,
-			&ipc::data_encode(&PacketClient::WvrDisplayGet(serial, handle)),
-		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-		Ok(display)
+			&PacketClient::WvrDisplayGet(serial, handle),
+			WvrDisplayGetResponse
+		))
 	}
 
 	pub async fn fn_wvr_display_remove(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 		handle: packet_server::WvrDisplayHandle,
 	) -> anyhow::Result<()> {
-		let PacketServer::WvrDisplayRemoveResponse(_, res) = WayVRClient::queue_wait_packet(
-			client_mtx,
+		send_and_wait!(
+			client,
 			serial,
-			&ipc::data_encode(&PacketClient::WvrDisplayRemove(serial, handle)),
+			&PacketClient::WvrDisplayRemove(serial, handle),
+			WvrDisplayRemoveResponse
 		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-
-		res.map_err(|e| anyhow::anyhow!("{}", e))
+		.map_err(|e| anyhow::anyhow!("{}", e))
 	}
 
 	pub async fn fn_wvr_display_create(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 		params: packet_client::WvrDisplayCreateParams,
 	) -> anyhow::Result<packet_server::WvrDisplayHandle> {
-		let PacketServer::WvrDisplayCreateResponse(_, handle) = WayVRClient::queue_wait_packet(
-			client_mtx,
+		Ok(send_and_wait!(
+			client,
 			serial,
-			&ipc::data_encode(&PacketClient::WvrDisplayCreate(serial, params)),
-		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-		Ok(handle)
+			&PacketClient::WvrDisplayCreate(serial, params),
+			WvrDisplayCreateResponse
+		))
 	}
 
 	pub async fn fn_wvr_process_list(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 	) -> anyhow::Result<Vec<packet_server::WvrProcess>> {
-		let PacketServer::WvrProcessListResponse(_, process_list) = WayVRClient::queue_wait_packet(
-			client_mtx,
-			serial,
-			&ipc::data_encode(&PacketClient::WvrProcessList(serial)),
+		Ok(
+			send_and_wait!(
+				client,
+				serial,
+				&PacketClient::WvrProcessList(serial),
+				WvrProcessListResponse
+			)
+			.list,
 		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-
-		Ok(process_list.list)
 	}
 
 	pub async fn fn_wvr_process_terminate(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		handle: packet_server::WvrProcessHandle,
 	) -> anyhow::Result<()> {
-		WayVRClient::send_payload(
-			client_mtx,
-			&ipc::data_encode(&PacketClient::WvrProcessTerminate(handle)),
-		)
-		.await?;
+		send_only!(client, &PacketClient::WvrProcessTerminate(handle));
 		Ok(())
 	}
 
 	pub async fn fn_wvr_process_launch(
-		client_mtx: WayVRClientMutex,
+		client: WayVRClientMutex,
 		serial: Serial,
 		params: packet_client::WvrProcessLaunchParams,
 	) -> anyhow::Result<packet_server::WvrProcessHandle> {
-		let PacketServer::WvrProcessLaunchResponse(_, res_handle) = WayVRClient::queue_wait_packet(
-			client_mtx,
+		send_and_wait!(
+			client,
 			serial,
-			&ipc::data_encode(&PacketClient::WvrProcessLaunch(serial, params)),
+			&PacketClient::WvrProcessLaunch(serial, params),
+			WvrProcessLaunchResponse
 		)
-		.await?
-		else {
-			bail_unexpected_response!();
-		};
-
-		res_handle.map_err(|e| anyhow::anyhow!("{}", e))
+		.map_err(|e| anyhow::anyhow!("{}", e))
 	}
 }
 
