@@ -38,6 +38,13 @@ pub struct WvrDisplayCreateParams {
 	pub attach_to: AttachTo,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WlxHapticsParams {
+	pub intensity: f32,
+	pub duration: f32,
+	pub frequency: f32,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PacketClient {
 	Handshake(Handshake),
@@ -45,7 +52,9 @@ pub enum PacketClient {
 	WvrDisplayGet(Serial, packet_server::WvrDisplayHandle),
 	WvrDisplayList(Serial),
 	WvrDisplayRemove(Serial, packet_server::WvrDisplayHandle),
+	WvrDisplaySetVisible(packet_server::WvrDisplayHandle, bool),
 	WvrProcessLaunch(Serial, WvrProcessLaunchParams),
 	WvrProcessList(Serial),
 	WvrProcessTerminate(packet_server::WvrProcessHandle),
+	WlxHaptics(WlxHapticsParams),
 }

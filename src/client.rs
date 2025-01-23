@@ -354,6 +354,15 @@ impl WayVRClient {
 		))
 	}
 
+	pub async fn fn_wvr_display_set_visible(
+		client: WayVRClientMutex,
+		handle: packet_server::WvrDisplayHandle,
+		visible: bool,
+	) -> anyhow::Result<()> {
+		send_only!(client, &PacketClient::WvrDisplaySetVisible(handle, visible));
+		Ok(())
+	}
+
 	pub async fn fn_wvr_process_list(
 		client: WayVRClientMutex,
 		serial: Serial,
@@ -389,6 +398,14 @@ impl WayVRClient {
 			WvrProcessLaunchResponse
 		)
 		.map_err(|e| anyhow::anyhow!("{}", e))
+	}
+
+	pub async fn fn_wlx_haptics(
+		client: WayVRClientMutex,
+		params: packet_client::WlxHapticsParams,
+	) -> anyhow::Result<()> {
+		send_only!(client, &PacketClient::WlxHaptics(params));
+		Ok(())
 	}
 }
 
