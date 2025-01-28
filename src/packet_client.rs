@@ -1,5 +1,7 @@
 // Contents of this file should be the same as on wlx-overlay-s.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::{ipc::Serial, packet_server};
@@ -27,6 +29,7 @@ pub struct WvrProcessLaunchParams {
 	pub target_display: packet_server::WvrDisplayHandle,
 	pub env: Vec<String>,
 	pub args: String,
+	pub userdata: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -53,6 +56,13 @@ pub enum PacketClient {
 	WvrDisplayList(Serial),
 	WvrDisplayRemove(Serial, packet_server::WvrDisplayHandle),
 	WvrDisplaySetVisible(packet_server::WvrDisplayHandle, bool),
+	WvrDisplayWindowList(Serial, packet_server::WvrDisplayHandle),
+	WvrDisplaySetWindowLayout(
+		packet_server::WvrDisplayHandle,
+		packet_server::WvrDisplayWindowLayout,
+	),
+	WvrWindowSetVisible(packet_server::WvrWindowHandle, bool),
+	WvrProcessGet(Serial, packet_server::WvrProcessHandle),
 	WvrProcessLaunch(Serial, WvrProcessLaunchParams),
 	WvrProcessList(Serial),
 	WvrProcessTerminate(packet_server::WvrProcessHandle),

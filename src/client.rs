@@ -363,6 +363,43 @@ impl WayVRClient {
 		Ok(())
 	}
 
+	pub async fn fn_wvr_display_set_layout(
+		client: WayVRClientMutex,
+		handle: packet_server::WvrDisplayHandle,
+		layout: packet_server::WvrDisplayWindowLayout,
+	) -> anyhow::Result<()> {
+		send_only!(
+			client,
+			&PacketClient::WvrDisplaySetWindowLayout(handle, layout)
+		);
+		Ok(())
+	}
+
+	pub async fn fn_wvr_display_window_list(
+		client: WayVRClientMutex,
+		serial: Serial,
+		handle: packet_server::WvrDisplayHandle,
+	) -> anyhow::Result<Option<Vec<packet_server::WvrWindow>>> {
+		Ok(
+			send_and_wait!(
+				client,
+				serial,
+				&PacketClient::WvrDisplayWindowList(serial, handle),
+				WvrDisplayWindowListResponse
+			)
+			.map(|res| res.list),
+		)
+	}
+
+	pub async fn fn_wvr_window_set_visible(
+		client: WayVRClientMutex,
+		handle: packet_server::WvrWindowHandle,
+		visible: bool,
+	) -> anyhow::Result<()> {
+		send_only!(client, &PacketClient::WvrWindowSetVisible(handle, visible));
+		Ok(())
+	}
+
 	pub async fn fn_wvr_process_list(
 		client: WayVRClientMutex,
 		serial: Serial,
@@ -376,6 +413,19 @@ impl WayVRClient {
 			)
 			.list,
 		)
+	}
+
+	pub async fn fn_wvr_process_get(
+		client: WayVRClientMutex,
+		serial: Serial,
+		handle: packet_server::WvrProcessHandle,
+	) -> anyhow::Result<Option<packet_server::WvrProcess>> {
+		Ok(send_and_wait!(
+			client,
+			serial,
+			&PacketClient::WvrProcessGet(serial, handle),
+			WvrProcessGetResponse
+		))
 	}
 
 	pub async fn fn_wvr_process_terminate(

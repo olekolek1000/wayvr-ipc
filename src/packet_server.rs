@@ -1,5 +1,7 @@
 // Contents of this file should be the same as on wlx-overlay-s.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::ipc::Serial;
@@ -29,6 +31,12 @@ pub struct WvrProcessHandle {
 	pub generation: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WvrWindowHandle {
+	pub idx: u32,
+	pub generation: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WvrDisplay {
 	pub width: u16,
@@ -39,8 +47,24 @@ pub struct WvrDisplay {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WvrWindow {
+	pub pos_x: i32,
+	pub pos_y: i32,
+	pub size_x: u32,
+	pub size_y: u32,
+	pub visible: bool,
+	pub handle: WvrWindowHandle,
+	pub process_handle: WvrProcessHandle,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WvrDisplayList {
 	pub list: Vec<WvrDisplay>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WvrWindowList {
+	pub list: Vec<WvrWindow>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,11 +72,32 @@ pub struct WvrProcess {
 	pub name: String,
 	pub display_handle: WvrDisplayHandle,
 	pub handle: WvrProcessHandle,
+	pub userdata: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WvrProcessList {
 	pub list: Vec<WvrProcess>,
+}
+
+#[derive(Default, Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Margins {
+	pub left: u16,
+	pub right: u16,
+	pub top: u16,
+	pub bottom: u16,
+}
+
+#[derive(Default, Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StackingOptions {
+	pub margins_first: Margins,
+	pub margins_rest: Margins,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum WvrDisplayWindowLayout {
+	Tiling,
+	Stacking(StackingOptions),
 }
 
 // "Wvr" prefixes are WayVR-specific
@@ -64,7 +109,9 @@ pub enum PacketServer {
 	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
 	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
 	WvrDisplayListResponse(Serial, WvrDisplayList),
+	WvrDisplayWindowListResponse(Serial, Option<WvrWindowList>),
 	WvrDisplayRemoveResponse(Serial, Result<(), String>),
+	WvrProcessGetResponse(Serial, Option<WvrProcess>),
 	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
 	WvrProcessListResponse(Serial, WvrProcessList),
 }
@@ -80,6 +127,8 @@ impl PacketServer {
 			PacketServer::WvrDisplayRemoveResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessLaunchResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessListResponse(serial, _) => Some(serial),
+			PacketServer::WvrProcessGetResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayWindowListResponse(serial, _) => Some(serial),
 		}
 	}
 }
