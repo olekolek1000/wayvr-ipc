@@ -39,6 +39,13 @@ pub struct AuthInfo {
 	pub runtime: String,
 }
 
+#[derive(Debug)]
+pub enum Signal {
+	WvrStateChanged(packet_server::WvrStateChanged),
+}
+
+type SignalFunc = Box<dyn FnMut(Signal) + Send>;
+
 pub struct WayVRClient {
 	receiver: ReceiverMutex,
 	sender: SenderMutex,
@@ -46,6 +53,7 @@ pub struct WayVRClient {
 	exiting: bool,
 	queued_packets: QueuedPacketVec,
 	pub auth: Option<AuthInfo>, // Some if authenticated
+	pub on_signal: Option<SignalFunc>,
 }
 
 pub async fn send_packet(sender: &SenderMutex, data: &[u8]) -> anyhow::Result<()> {
@@ -114,6 +122,10 @@ macro_rules! send_only {
 }
 
 impl WayVRClient {
+	pub fn set_signal_handler(&mut self, on_signal: SignalFunc) {
+		self.on_signal = Some(on_signal);
+	}
+
 	pub async fn new(client_name: &str) -> anyhow::Result<WayVRClientMutex> {
 		let printname = "/tmp/wayvr_ipc.sock";
 		let name = printname.to_ns_name::<GenericNamespaced>()?;
@@ -138,6 +150,7 @@ impl WayVRClient {
 			cancel_token: cancel_token.clone(),
 			queued_packets: QueuedPacketVec::new(),
 			auth: None,
+			on_signal: None,
 		}));
 
 		WayVRClient::start_runner(client.clone(), cancel_token);
@@ -214,6 +227,13 @@ impl WayVRClient {
 				anyhow::bail!(
 					"Server tried to send us a packet which is not a HandshakeSuccess or Disconnect"
 				);
+			}
+
+			if let PacketServer::WvrStateChanged(state) = &packet {
+				// Send signal to the frontend
+				if let Some(on_signal) = &mut client.on_signal {
+					(*on_signal)(Signal::WvrStateChanged(state.clone()));
+				}
 			}
 
 			// queue packet to read if it contains a serial response

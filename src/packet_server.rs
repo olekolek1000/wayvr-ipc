@@ -37,7 +37,7 @@ pub struct WvrWindowHandle {
 	pub generation: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrDisplay {
 	pub width: u16,
 	pub height: u16,
@@ -46,7 +46,7 @@ pub struct WvrDisplay {
 	pub handle: WvrDisplayHandle,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrWindow {
 	pub pos_x: i32,
 	pub pos_y: i32,
@@ -55,19 +55,20 @@ pub struct WvrWindow {
 	pub visible: bool,
 	pub handle: WvrWindowHandle,
 	pub process_handle: WvrProcessHandle,
+	pub display_handle: WvrDisplayHandle,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrDisplayList {
 	pub list: Vec<WvrDisplay>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrWindowList {
 	pub list: Vec<WvrWindow>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrProcess {
 	pub name: String,
 	pub display_handle: WvrDisplayHandle,
@@ -75,7 +76,7 @@ pub struct WvrProcess {
 	pub userdata: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WvrProcessList {
 	pub list: Vec<WvrProcess>,
 }
@@ -100,12 +101,23 @@ pub enum WvrDisplayWindowLayout {
 	Stacking(StackingOptions),
 }
 
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum WvrStateChanged {
+	DisplayCreated,
+	DisplayRemoved,
+	ProcessCreated,
+	ProcessRemoved,
+	WindowCreated,
+	WindowRemoved,
+}
+
 // "Wvr" prefixes are WayVR-specific
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PacketServer {
 	HandshakeSuccess(HandshakeSuccess),
 	Disconnect(Disconnect),
+	WvrStateChanged(WvrStateChanged),
 	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
 	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
 	WvrDisplayListResponse(Serial, WvrDisplayList),
@@ -121,6 +133,7 @@ impl PacketServer {
 		match self {
 			PacketServer::HandshakeSuccess(_) => None,
 			PacketServer::Disconnect(_) => None,
+			PacketServer::WvrStateChanged(_) => None,
 			PacketServer::WvrDisplayCreateResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayGetResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayListResponse(serial, _) => Some(serial),
