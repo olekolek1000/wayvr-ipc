@@ -109,39 +109,55 @@ pub enum WvrStateChanged {
 	ProcessRemoved,
 	WindowCreated,
 	WindowRemoved,
+	DashboardShown,
+	DashboardHidden,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct WlxInputStatePointer {
+	pub pos: [f32; 3],
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct WlxInputState {
+	pub hmd_pos: [f32; 3],
+	pub left: WlxInputStatePointer,
+	pub right: WlxInputStatePointer,
 }
 
 // "Wvr" prefixes are WayVR-specific
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PacketServer {
-	HandshakeSuccess(HandshakeSuccess),
 	Disconnect(Disconnect),
-	WvrStateChanged(WvrStateChanged),
+	HandshakeSuccess(HandshakeSuccess),
+	WlxInputStateResponse(Serial, WlxInputState),
 	WvrDisplayCreateResponse(Serial, WvrDisplayHandle),
 	WvrDisplayGetResponse(Serial, Option<WvrDisplay>),
 	WvrDisplayListResponse(Serial, WvrDisplayList),
-	WvrDisplayWindowListResponse(Serial, Option<WvrWindowList>),
 	WvrDisplayRemoveResponse(Serial, Result<(), String>),
+	WvrDisplayWindowListResponse(Serial, Option<WvrWindowList>),
 	WvrProcessGetResponse(Serial, Option<WvrProcess>),
 	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
 	WvrProcessListResponse(Serial, WvrProcessList),
+	WvrStateChanged(WvrStateChanged),
 }
 
 impl PacketServer {
 	pub fn serial(&self) -> Option<&Serial> {
 		match self {
-			PacketServer::HandshakeSuccess(_) => None,
 			PacketServer::Disconnect(_) => None,
-			PacketServer::WvrStateChanged(_) => None,
+			PacketServer::HandshakeSuccess(_) => None,
+			PacketServer::WlxInputStateResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayCreateResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayGetResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayListResponse(serial, _) => Some(serial),
 			PacketServer::WvrDisplayRemoveResponse(serial, _) => Some(serial),
+			PacketServer::WvrDisplayWindowListResponse(serial, _) => Some(serial),
+			PacketServer::WvrProcessGetResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessLaunchResponse(serial, _) => Some(serial),
 			PacketServer::WvrProcessListResponse(serial, _) => Some(serial),
-			PacketServer::WvrProcessGetResponse(serial, _) => Some(serial),
-			PacketServer::WvrDisplayWindowListResponse(serial, _) => Some(serial),
+			PacketServer::WvrStateChanged(_) => None,
 		}
 	}
 }

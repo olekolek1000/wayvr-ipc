@@ -39,12 +39,7 @@ pub struct AuthInfo {
 	pub runtime: String,
 }
 
-#[derive(Debug)]
-pub enum Signal {
-	WvrStateChanged(packet_server::WvrStateChanged),
-}
-
-type SignalFunc = Box<dyn FnMut(Signal) + Send>;
+type SignalFunc = Box<dyn FnMut(&packet_server::PacketServer) -> bool + Send>;
 
 pub struct WayVRClient {
 	receiver: ReceiverMutex,
@@ -229,10 +224,12 @@ impl WayVRClient {
 				);
 			}
 
-			if let PacketServer::WvrStateChanged(state) = &packet {
-				// Send signal to the frontend
+			if let PacketServer::WvrStateChanged(_) = &packet {
 				if let Some(on_signal) = &mut client.on_signal {
-					(*on_signal)(Signal::WvrStateChanged(state.clone()));
+					if (*on_signal)(&packet) {
+						// Signal consumed
+						return Ok(());
+					}
 				}
 			}
 
@@ -468,6 +465,18 @@ impl WayVRClient {
 			WvrProcessLaunchResponse
 		)
 		.map_err(|e| anyhow::anyhow!("{}", e))
+	}
+
+	pub async fn fn_wlx_input_state(
+		client: WayVRClientMutex,
+		serial: Serial,
+	) -> anyhow::Result<packet_server::WlxInputState> {
+		Ok(send_and_wait!(
+			client,
+			serial,
+			&PacketClient::WlxInputState(serial),
+			WlxInputStateResponse
+		))
 	}
 
 	pub async fn fn_wlx_haptics(

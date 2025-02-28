@@ -67,4 +67,5 @@ pub enum PacketClient {
 	WvrProcessList(Serial),
 	WvrProcessTerminate(packet_server::WvrProcessHandle),
 	WlxHaptics(WlxHapticsParams),
+	WlxInputState(Serial),
 }
